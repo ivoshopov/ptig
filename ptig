@@ -1,0 +1,110 @@
+#!/bin/bash
+
+#Piwigo thumbnail image generation
+#Author: Poul Serek
+
+shopt -s globstar
+
+usage() { echo "Usage: $0 -s <dir name> [-d <dir name>]" 1>&2; exit 1; }
+
+while getopts ":s:d:" o; do
+	case "${o}" in
+		s)
+			sourceDir=${OPTARG}
+			;;
+		d)
+			destDir=${OPTARG}
+			;;
+		*)
+			usage
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+if [ -z "${sourceDir}" ]; then
+	usage
+fi
+
+
+counter=0
+fnNoExt=""
+fnExt=""
+fnPath=""
+
+STARTTIME=$(date +%s)
+#IFS=$'\n'
+for file in "$sourceDir"/**/*.{jpg,JPG,jpeg,JPEG}
+do
+        if [[ ! -f "$file" ]]
+        then
+                continue
+        fi
+
+        fnNoExt="${file%.*}"
+        fnExt="${file##*.}"
+        fnPath="${file%/*}"
+        fnPath="${fnPath#$sourceDir/}"
+        fnNoExt="${fnNoExt#$sourceDir/}"
+
+
+        mkdir -p "${destDir}${fnPath}"
+
+
+	sq_convert=""
+	th_convert=""
+	ts_convert=""
+	sm_convert=""
+	me_convert=""
+	la_convert=""
+	xl_convert=""
+	xx_convert=""
+        [ -f "${destDir}${fnNoExt}-sq.${fnExt}" ] || sq_convert="mpr:baseline -define jpeg:size=144x144 -thumbnail 120x120^ -gravity center -extent 120x120 ${destDir}${fnNoExt}-sq.${fnExt} "
+        [ -f "${destDir}${fnNoExt}-th.${fnExt}" ] || th_convert="mpr:baseline -resize 144x144  -write" && th_file="${destDir}${fnNoExt}-th.${fnExt}" th_del="+delete"
+        [ -f "${destDir}${fnNoExt}-2s.${fnExt}" ] || ts_convert="mpr:baseline -resize 240x240  -write" && ts_file="${destDir}${fnNoExt}-2s.${fnExt}" ts_del="+delete"
+        [ -f "${destDir}${fnNoExt}-sm.${fnExt}" ] || sm_convert="mpr:baseline -resize 576x432  -write" && sm_file="${destDir}${fnNoExt}-sm.${fnExt}" sm_del="+delete"
+	[ -f "${destDir}${fnNoExt}-me.${fnExt}" ] || me_convert="mpr:baseline -resize 792x594  -write" && me_file="${destDir}${fnNoExt}-me.${fnExt}" me_del="+delete"
+        [ -f "${destDir}${fnNoExt}-la.${fnExt}" ] || la_convert="mpr:baseline -resize 1008x756 -write" && la_file="${destDir}${fnNoExt}-la.${fnExt}" la_del="+delete"
+        [ -f "${destDir}${fnNoExt}-xl.${fnExt}" ] || xl_convert="mpr:baseline -resize 1224x918 -write" && xl_file="${destDir}${fnNoExt}-xl.${fnExt}" xl_del="+delete"
+        [ -f "${destDir}${fnNoExt}-xx.${fnExt}" ] || xx_convert="mpr:baseline -write"		       && xx_file="${destDir}${fnNoExt}-xx.${fnExt}" xx_del="+delete "
+
+        if [ "${sq_convert}${th_convert}${ts_convert}${sm_convert}${me_convert}${la_convert}${xl_convert}${xx_convert}" != "" ]; then
+                #Error checking
+                result=$(jpeginfo -c "$file")
+                if [[ $result != *"[OK]"* ]]
+                then
+                        echo "$result" >&2
+                fi
+		echo -n "convert ${fnNoExt}"
+		[ "$sq_convert" == "" ] || echo -n " sq "
+		[ "$th_convert" == "" ] || echo -n " th "
+		[ "$ts_convert" == "" ] || echo -n " 2s "
+		[ "$sm_convert" == "" ] || echo -n " sm "
+		[ "$me_convert" == "" ] || echo -n " me "
+		[ "$la_convert" == "" ] || echo -n " la "
+		[ "$xl_convert" == "" ] || echo -n " xl "
+		[ "$xx_convert" == "" ] || echo -n " xx "
+		echo
+		# TODO: we don't need to write sq image every time but since 'convert' need a filename at the end we put sq filename
+		sq_convert="mpr:baseline -define jpeg:size=144x144 -thumbnail 120x120^ -gravity center -extent 120x120"
+	       	sq_file="${destDir}${fnNoExt}-sq.${fnExt}"
+                #Store correctly oriented base image (xxl size) in memory. All other thumbnails are created from this
+                convert "${file}" -auto-orient -resize 1656x1242 -write mpr:baseline +delete \
+			$th_convert "$th_file" $th_del \
+			$ts_convert "$ts_file" $ts_del \
+			$sm_convert "$sm_file" $sm_del \
+			$me_convert "$me_file" $me_del \
+			$la_convert "$la_file" $la_del \
+			$xl_convert "$xl_file" $xl_del \
+			$xx_convert "$xx_file" $xx_del \
+			$sq_convert "$sq_file"
+        fi
+        counter=$[$counter +1]
+        if [ $(($counter%100)) -eq 0 ]; then
+                ENDTIME=$(date +%s)
+                echo "Processed: ${counter} - Executing for $((($ENDTIME - $STARTTIME)/60)) minutes"
+        fi
+done
+
+ENDTIME=$(date +%s)
+echo "It took $((($ENDTIME - $STARTTIME)/60)) min $((($ENDTIME - $STARTTIME)%60)) sec to complete this task..."

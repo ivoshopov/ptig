@@ -1,0 +1,44 @@
+#!/bin/bash
+
+shopt -s globstar
+
+
+usage() { echo "Usage: $0 -s <dir name> -p <string>" 1>&2; exit 1; }
+
+while getopts ":s:p:" o; do
+	case "${o}" in
+		s)
+			sourceDir=${OPTARG}
+			;;
+		p)
+			pattern=${OPTARG}
+			;;
+		*)
+			usage
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+if [ -z "${sourceDir}" ] || [ -z "${pattern}" ]; then
+	usage
+fi
+
+
+#sourceDir="/mnt/exthdd/photos/piwigo/"
+#pattern="-me"
+for file in "$sourceDir"/**/*${pattern}.{jpg,JPG,jpeg,JPEG}
+do
+        if [[ ! -f "$file" ]]
+        then
+                continue
+        fi
+
+	echo "file: $file"
+        subdir="${file%/*}"
+        subdir="${subdir#$sourceDir}"
+        mkdir -p "./${subdir}"
+	link=$(realpath "$file")
+	echo "link: $link"
+	bash -c "cd ./\"${subdir}\" && ln -sf \"$link\""
+done
